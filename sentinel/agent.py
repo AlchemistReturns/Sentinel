@@ -33,6 +33,11 @@ Process:
 
 Be conservative: false positives are worse than a missed edge case. If a file has no
 unused imports, do not report anything for it.
+
+Hard scope rule: an `import` statement is the ONLY thing you may report. Never report
+unused variables, unused constants, unused functions, or anything else, even if you
+notice it -- that is out of scope for this run and must not appear in your findings list,
+regardless of what you say about it in your reasoning.
 """
     + CONVERGENCE_RULE
 )

@@ -7,6 +7,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel
 from starlette.responses import Response
 
+from sentinel import killswitch
 from sentinel.graph import build_graph
 from sentinel.logging import configure_logging, get_logger
 
@@ -48,6 +49,25 @@ def health():
 @app.get("/metrics")
 def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/api/kill-switch")
+def get_kill_switch():
+    return {"active": killswitch.is_active()}
+
+
+@app.post("/api/kill-switch/activate")
+def activate_kill_switch():
+    killswitch.activate()
+    get_logger().info("kill_switch.activated")
+    return {"active": True}
+
+
+@app.post("/api/kill-switch/deactivate")
+def deactivate_kill_switch():
+    killswitch.deactivate()
+    get_logger().info("kill_switch.deactivated")
+    return {"active": False}
 
 
 @app.post("/api/audits")

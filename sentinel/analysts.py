@@ -4,6 +4,7 @@ from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 from langgraph.errors import GraphRecursionError
 
+from sentinel import killswitch
 from sentinel.agent import CONVERGENCE_RULE, MAX_ANALYST_STEPS
 from sentinel.agent import SYSTEM_PROMPT as QUALITY_SYSTEM_PROMPT
 from sentinel.config import settings
@@ -79,6 +80,9 @@ def _run_analyst(
     run_name: str,
 ) -> list[dict]:
     log = get_logger(audit_id=audit_id, analyst=run_name)
+    if killswitch.is_active():
+        log.info("analyst.halted", reason="kill switch active")
+        return []
     agent = create_agent(
         model=settings.agent_model,
         tools=tools,

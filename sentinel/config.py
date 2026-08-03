@@ -16,6 +16,7 @@ class Settings:
     langchain_project: str = os.environ.get("LANGCHAIN_PROJECT", "sentinel")
     embedding_model: str = os.environ.get("SENTINEL_EMBEDDING_MODEL", "text-embedding-3-small")
     agent_model: str = os.environ.get("SENTINEL_AGENT_MODEL", "gpt-4.1-mini")
+    github_token: str = os.environ.get("GITHUB_TOKEN", "")
 
     @property
     def pgvector_url(self) -> str:

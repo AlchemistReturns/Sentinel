@@ -1,3 +1,26 @@
+export type ProposedFix = {
+  old_snippet: string;
+  new_snippet: string;
+  explanation: string;
+  unfixable: boolean;
+};
+
+export type Validation = {
+  lint_passed: boolean;
+  tests_passed: boolean;
+  lint_output: string;
+  test_output: string;
+  passed: boolean;
+};
+
+export type PrStatus =
+  | "not_auto_fixable"
+  | "validation_failed"
+  | "duplicate_skipped"
+  | "opened"
+  | "opened_draft"
+  | "halted";
+
 export type Finding = {
   file_path: string;
   line: number;
@@ -6,6 +29,11 @@ export type Finding = {
   explanation: string;
   analyst?: "security" | "quality" | "test";
   risk_tier?: "mechanical" | "risky";
+  semantic_cache_hit?: boolean;
+  proposed_fix?: ProposedFix | null;
+  validation?: Validation;
+  pr_url?: string;
+  pr_status?: PrStatus;
 };
 
 export type AuditResult = {
@@ -36,6 +64,22 @@ export async function runAudit(repo: string): Promise<AuditResult> {
 
 export function liveAuditSocketUrl(repo: string): string {
   return `${WS_URL}/ws/audits?repo=${encodeURIComponent(repo)}`;
+}
+
+export async function fetchKillSwitch(): Promise<boolean> {
+  const res = await fetch(`${API_URL}/api/kill-switch`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Failed to fetch kill switch: ${res.status}`);
+  const data = await res.json();
+  return data.active;
+}
+
+export async function setKillSwitch(active: boolean): Promise<boolean> {
+  const res = await fetch(`${API_URL}/api/kill-switch/${active ? "activate" : "deactivate"}`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(`Failed to set kill switch: ${res.status}`);
+  const data = await res.json();
+  return data.active;
 }
 
 // -- Live event parsing --------------------------------------------------

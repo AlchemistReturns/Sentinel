@@ -6,7 +6,7 @@ Full spec and phased build plan tracked privately (see local `sentinel-project-b
 
 ## Status
 
-Phase 3 done: symbol-aware chunking, a Redis-backed content-hash cache (skips re-embedding unchanged code) and semantic cache (dedups near-duplicate findings), findings history in pgvector, real semgrep/pip-audit grounding for the Security Analyst, and cache-hit-rate metrics on `/metrics` for Prometheus.
+Phase 4 done: Sentinel generates real fixes, validates them (ruff + pytest), and opens real PRs on GitHub via the API — mechanical fixes as normal PRs, risky (security) fixes as drafts labeled `needs-security-review`. Idempotent on re-run (no duplicate PRs), with a working kill switch and a PR review screen in the dashboard.
 
 ## Stack
 
@@ -20,7 +20,9 @@ docker compose up -d   # postgres+pgvector, redis, prometheus, grafana
 uv run sentinel ingest --repo .
 uv run sentinel query --repo . --text "your question about the codebase"
 uv run sentinel investigate --repo .   # single quality-analyst agent (Phase 1)
-uv run sentinel audit --repo .         # full multi-agent graph: security + quality + test (Phase 2)
+uv run sentinel audit --repo .         # full multi-agent graph: findings + fixes + real PRs (Phase 2-4)
+# point --repo at a real GitHub-backed clone (not this repo) to see PRs actually open, e.g.:
+# uv run sentinel audit --repo ../sentinel-test-target
 
 # orchestrator API + dashboard
 uv run uvicorn sentinel.api:app --port 8000
