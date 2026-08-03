@@ -13,6 +13,7 @@ from sentinel.cost import BudgetExceededError, BudgetTrackingCallback, check_dai
 from sentinel.graph import build_graph, run_audit
 from sentinel.logging import configure_logging, get_logger
 from sentinel.queue import enqueue_audit, get_job_status
+from sentinel.repos import InvalidRepoError, connect_repo
 
 configure_logging()
 
@@ -35,6 +36,11 @@ _latest_audit_id: str | None = None
 
 class AuditRequest(BaseModel):
     repo: str = "."
+
+
+class ConnectRepoRequest(BaseModel):
+    url: str
+    branch: str | None = None
 
 
 def _jsonable(obj):
@@ -74,6 +80,17 @@ def deactivate_kill_switch():
     killswitch.deactivate()
     get_logger().info("kill_switch.deactivated")
     return {"active": False}
+
+
+@app.post("/api/repos/connect")
+def connect_repo_endpoint(req: ConnectRepoRequest):
+    """Clones (or updates) a GitHub repo by URL and returns the local path to feed into
+    /api/audits or /ws/audits -- the onboarding step that means a stranger never has to
+    pre-clone anything or hand-edit config."""
+    try:
+        return connect_repo(req.url, req.branch)
+    except InvalidRepoError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/audits")

@@ -24,6 +24,7 @@ IGNORED_DIRS = {
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
+    ".sentinel_repos",
 }
 
 CHUNK_LINES = 60

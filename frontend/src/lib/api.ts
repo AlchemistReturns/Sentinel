@@ -71,6 +71,25 @@ export async function runAudit(repo: string): Promise<AuditResult> {
   return res.json();
 }
 
+export type ConnectedRepo = { local_path: string; branch: string; url: string };
+
+export function isGitHubUrl(value: string): boolean {
+  return /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(value.trim());
+}
+
+export async function connectRepo(url: string, branch?: string): Promise<ConnectedRepo> {
+  const res = await fetch(`${API_URL}/api/repos/connect`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, branch: branch || null }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ?? `Failed to connect repo: ${res.status}`);
+  }
+  return res.json();
+}
+
 export function liveAuditSocketUrl(repo: string): string {
   return `${WS_URL}/ws/audits?repo=${encodeURIComponent(repo)}`;
 }

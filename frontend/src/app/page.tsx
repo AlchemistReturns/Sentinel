@@ -46,9 +46,11 @@ import {
   type AuditResult,
   type Finding,
   type TimelineEntry,
+  connectRepo,
   fetchAuditHistory,
   fetchKillSwitch,
   fetchLatestAudit,
+  isGitHubUrl,
   liveAuditSocketUrl,
   parseTimelineEntry,
   setKillSwitch,
@@ -287,14 +289,20 @@ function Nav({
 function Hero({
   repo,
   onRepoChange,
+  branch,
+  onBranchChange,
   onRun,
   running,
+  connecting,
   disabled,
 }: {
   repo: string;
   onRepoChange: (v: string) => void;
+  branch: string;
+  onBranchChange: (v: string) => void;
   onRun: () => void;
   running: boolean;
+  connecting: boolean;
   disabled: boolean;
 }) {
   const steps = [
@@ -331,21 +339,37 @@ function Hero({
         </p>
       </div>
 
-      <div className="flex w-full max-w-lg flex-col gap-2 sm:flex-row">
-        <Input
-          value={repo}
-          onChange={(e) => onRepoChange(e.target.value)}
-          placeholder="Path to target repository"
-          className="h-11 font-mono text-sm"
-        />
-        <Button onClick={onRun} disabled={running || disabled} size="lg" className="gap-2">
-          {running ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Play className="size-4" />
+      <div className="flex w-full max-w-lg flex-col gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            value={repo}
+            onChange={(e) => onRepoChange(e.target.value)}
+            placeholder="GitHub URL or local path"
+            aria-label="Repository URL or local path"
+            className="h-11 font-mono text-sm"
+          />
+          {isGitHubUrl(repo) && (
+            <Input
+              value={branch}
+              onChange={(e) => onBranchChange(e.target.value)}
+              placeholder="Branch (default)"
+              aria-label="Branch"
+              className="h-11 font-mono text-sm sm:w-40"
+            />
           )}
-          Run audit
-        </Button>
+          <Button onClick={onRun} disabled={running || connecting || disabled} size="lg" className="gap-2">
+            {running || connecting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Play className="size-4" />
+            )}
+            {connecting ? "Connecting…" : running ? "Running…" : "Run audit"}
+          </Button>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          Paste a public GitHub repo URL, or a local path if you&apos;re running Sentinel
+          against a repo already on this machine.
+        </p>
       </div>
 
       <div className="grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
@@ -365,8 +389,10 @@ function Hero({
 
 export default function Home() {
   const [repo, setRepo] = useState(DEFAULT_REPO);
+  const [branch, setBranch] = useState("");
   const [audit, setAudit] = useState<AuditResult | null>(null);
   const [running, setRunning] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -396,14 +422,29 @@ export default function Home() {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [timeline]);
 
-  function handleRunAudit() {
-    setRunning(true);
+  async function handleRunAudit() {
     setError(null);
+
+    let targetPath = repo;
+    if (isGitHubUrl(repo)) {
+      setConnecting(true);
+      try {
+        const connected = await connectRepo(repo, branch);
+        targetPath = connected.local_path;
+      } catch (err) {
+        setError(String(err instanceof Error ? err.message : err));
+        setConnecting(false);
+        return;
+      }
+      setConnecting(false);
+    }
+
+    setRunning(true);
     setTimeline([]);
     setExpanded(new Set());
     seqRef.current = 0;
 
-    const ws = new WebSocket(liveAuditSocketUrl(repo));
+    const ws = new WebSocket(liveAuditSocketUrl(targetPath));
 
     ws.onmessage = (ev) => {
       try {
@@ -470,8 +511,11 @@ export default function Home() {
           <Hero
             repo={repo}
             onRepoChange={setRepo}
+            branch={branch}
+            onBranchChange={setBranch}
             onRun={handleRunAudit}
             running={running}
+            connecting={connecting}
             disabled={killActive}
           />
         ) : (
@@ -479,16 +523,30 @@ export default function Home() {
             <Input
               value={repo}
               onChange={(e) => setRepo(e.target.value)}
-              placeholder="Path to target repository"
+              placeholder="GitHub URL or local path"
+              aria-label="Repository URL or local path"
               className="font-mono text-sm"
             />
-            <Button onClick={handleRunAudit} disabled={running || killActive} className="gap-2">
-              {running ? (
+            {isGitHubUrl(repo) && (
+              <Input
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+                placeholder="Branch (default)"
+                aria-label="Branch"
+                className="font-mono text-sm sm:w-40"
+              />
+            )}
+            <Button
+              onClick={handleRunAudit}
+              disabled={running || connecting || killActive}
+              className="gap-2"
+            >
+              {running || connecting ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <Play className="size-4" />
               )}
-              Run audit
+              {connecting ? "Connecting…" : running ? "Running…" : "Run audit"}
             </Button>
           </div>
         )}
