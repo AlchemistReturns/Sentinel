@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -288,9 +288,8 @@ export default function Home() {
                 </TableHeader>
                 <TableBody>
                   {audit.findings.map((f, i) => (
-                    <>
+                    <Fragment key={i}>
                       <TableRow
-                        key={i}
                         className={f.proposed_fix ? "cursor-pointer" : undefined}
                         onClick={() => f.proposed_fix && toggleExpanded(i)}
                       >
@@ -316,13 +315,13 @@ export default function Home() {
                         </TableCell>
                       </TableRow>
                       {expanded.has(i) && f.proposed_fix && (
-                        <TableRow key={`${i}-detail`}>
+                        <TableRow>
                           <TableCell colSpan={6}>
                             <FixDiff finding={f} />
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
