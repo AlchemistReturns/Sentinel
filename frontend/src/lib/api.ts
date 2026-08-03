@@ -4,6 +4,8 @@ export type Finding = {
   symbol: string;
   evidence: string;
   explanation: string;
+  analyst?: "security" | "quality" | "test";
+  risk_tier?: "mechanical" | "risky";
 };
 
 export type AuditResult = {
@@ -13,6 +15,7 @@ export type AuditResult = {
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const WS_URL = API_URL.replace(/^http/, "ws");
 
 export async function fetchLatestAudit(): Promise<AuditResult | null> {
   const res = await fetch(`${API_URL}/api/audits/latest`, { cache: "no-store" });
@@ -29,4 +32,82 @@ export async function runAudit(repo: string): Promise<AuditResult> {
   });
   if (!res.ok) throw new Error(`Failed to run audit: ${res.status}`);
   return res.json();
+}
+
+export function liveAuditSocketUrl(repo: string): string {
+  return `${WS_URL}/ws/audits?repo=${encodeURIComponent(repo)}`;
+}
+
+// -- Live event parsing --------------------------------------------------
+//
+// The orchestrator streams raw LangGraph "updates" events over the websocket:
+// top-level graph nodes (ingest, scope, diagnose, ...) arrive with an empty
+// namespace; sub-agent internals (each analyst's own model/tool-call loop)
+// arrive namespaced as "<node_name>:<run_id>". We turn those into a flat,
+// human-readable timeline.
+
+export type TimelineEntry = {
+  id: string;
+  label: string;
+  detail?: string;
+};
+
+type RawEvent =
+  | { event: "update"; namespace: string[]; update: Record<string, unknown> }
+  | ({ event: "done" } & AuditResult);
+
+function analystLabel(namespace: string[]): string | null {
+  if (namespace.length === 0) return null;
+  const [node] = namespace[0].split(":");
+  return node
+    .split("_")
+    .map((w) => w[0]?.toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+export function parseTimelineEntry(raw: string, seq: number): TimelineEntry | null {
+  const data = JSON.parse(raw) as RawEvent;
+
+  if (data.event === "done") {
+    return { id: `done-${seq}`, label: `Audit complete — ${data.findings.length} finding(s)` };
+  }
+
+  const { namespace, update } = data;
+  const who = analystLabel(namespace);
+
+  // Top-level graph node finished.
+  if (namespace.length === 0) {
+    const [nodeName] = Object.keys(update);
+    if (!nodeName) return null;
+    const label = nodeName
+      .split("_")
+      .map((w) => w[0]?.toUpperCase() + w.slice(1))
+      .join(" ");
+    return { id: `${seq}`, label: `✓ ${label} finished` };
+  }
+
+  // Sub-agent model step: about to call a tool (or produced a final answer).
+  if ("model" in update) {
+    const msg = (update as any).model?.messages?.[0];
+    const toolCalls = msg?.tool_calls as { name: string }[] | undefined;
+    if (toolCalls && toolCalls.length > 0) {
+      const names = toolCalls.map((t) => t.name).join(", ");
+      return { id: `${seq}`, label: `${who} → calling ${names}` };
+    }
+    return { id: `${seq}`, label: `${who} → reasoning` };
+  }
+
+  // Sub-agent tool step: a tool call returned.
+  if ("tools" in update) {
+    const msgs = ((update as any).tools?.messages ?? []) as {
+      name: string;
+      content: string;
+    }[];
+    const detail = msgs
+      .map((m) => `${m.name}: ${String(m.content).slice(0, 120)}`)
+      .join(" | ");
+    return { id: `${seq}`, label: `${who} ← tool result`, detail };
+  }
+
+  return { id: `${seq}`, label: `${who ?? "graph"} update` };
 }

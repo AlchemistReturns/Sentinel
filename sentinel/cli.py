@@ -1,8 +1,10 @@
 import json
+import uuid
 
 import typer
 
 from sentinel.agent import run_investigation
+from sentinel.graph import build_graph
 from sentinel.ingest import ingest_repo, query_repo
 from sentinel.logging import configure_logging
 
@@ -35,6 +37,24 @@ def investigate(repo: str = typer.Option(..., "--repo", help="Path to the target
     configure_logging()
     result = run_investigation(repo)
     typer.echo(json.dumps(result, indent=2))
+
+
+@app.command()
+def audit(repo: str = typer.Option(..., "--repo", help="Path to the target repository")):
+    """Run the full multi-agent audit graph (security, quality, test analysts in parallel)."""
+    configure_logging()
+    graph = build_graph()
+    result = graph.invoke({"audit_id": str(uuid.uuid4()), "repo_path": repo})
+    typer.echo(
+        json.dumps(
+            {
+                "audit_id": result["audit_id"],
+                "repo": result["repo_path"],
+                "findings": result.get("findings", []),
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

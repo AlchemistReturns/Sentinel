@@ -6,7 +6,7 @@ Full spec and phased build plan tracked privately (see local `sentinel-project-b
 
 ## Status
 
-Phase 1 done: a single LangChain agent investigates a repo for unused imports (LangSmith-traced), served via a minimal FastAPI orchestrator and rendered in a Next.js dashboard.
+Phase 2 done: a LangGraph audit graph runs Security, Quality, and Test analyst sub-agents in parallel, synthesizes their findings with a risk tier, and streams the whole run live over WebSocket to the dashboard.
 
 ## Stack
 
@@ -19,7 +19,8 @@ cp .env.example .env   # fill in OPENAI_API_KEY, GITHUB_TOKEN, etc.
 docker compose up -d   # postgres+pgvector, redis, prometheus, grafana
 uv run sentinel ingest --repo .
 uv run sentinel query --repo . --text "your question about the codebase"
-uv run sentinel investigate --repo .   # runs the quality-analyst agent, prints findings JSON
+uv run sentinel investigate --repo .   # single quality-analyst agent (Phase 1)
+uv run sentinel audit --repo .         # full multi-agent graph: security + quality + test (Phase 2)
 
 # orchestrator API + dashboard
 uv run uvicorn sentinel.api:app --port 8000

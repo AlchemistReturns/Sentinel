@@ -2,13 +2,23 @@ import uuid
 from pathlib import Path
 
 from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
+from langgraph.errors import GraphRecursionError
 
 from sentinel.config import settings
 from sentinel.findings import FindingsReport
 from sentinel.logging import get_logger
 from sentinel.tools import make_tools
 
-SYSTEM_PROMPT = """You are Sentinel's Quality Analyst, a meticulous senior code reviewer.
+CONVERGENCE_RULE = """
+Hard rules: never call the same tool with the same arguments twice. Once you have gathered
+enough information to answer, submit your final report immediately -- do not re-verify or
+re-read anything you've already seen. You have a limited number of tool calls; use them
+deliberately.
+"""
+
+SYSTEM_PROMPT = (
+    """You are Sentinel's Quality Analyst, a meticulous senior code reviewer.
 
 Your task for this run: find unused imports in the Python files of this repository.
 
@@ -24,6 +34,14 @@ Process:
 Be conservative: false positives are worse than a missed edge case. If a file has no
 unused imports, do not report anything for it.
 """
+    + CONVERGENCE_RULE
+)
+
+# Hard stop on the agent's internal model/tool loop -- a safety net against a model that
+# doesn't converge (langgraph's own default recursion_limit is effectively unbounded).
+# Phase 5 replaces this with a proper cost/step budget; for now this just prevents a
+# runaway agent from looping indefinitely and burning tokens.
+MAX_ANALYST_STEPS = 50
 
 
 def run_investigation(repo_path: str, model: str | None = None) -> dict:
@@ -36,18 +54,28 @@ def run_investigation(repo_path: str, model: str | None = None) -> dict:
         model=model or settings.agent_model,
         tools=tools,
         system_prompt=SYSTEM_PROMPT,
-        response_format=FindingsReport,
+        response_format=ToolStrategy(FindingsReport, handle_errors=True),
     )
 
     log.info("investigate.start", repo=str(repo))
-    result = agent.invoke(
-        {"messages": [{"role": "user", "content": "Audit this repository for unused imports."}]},
-        config={
-            "run_name": "sentinel-quality-analyst",
-            "tags": ["sentinel", "quality-analyst"],
-            "metadata": {"audit_id": audit_id, "repo": str(repo)},
-        },
-    )
+    try:
+        result = agent.invoke(
+            {
+                "messages": [
+                    {"role": "user", "content": "Audit this repository for unused imports."}
+                ]
+            },
+            config={
+                "run_name": "sentinel-quality-analyst",
+                "tags": ["sentinel", "quality-analyst"],
+                "metadata": {"audit_id": audit_id, "repo": str(repo)},
+                "recursion_limit": MAX_ANALYST_STEPS,
+            },
+        )
+    except GraphRecursionError:
+        log.error("investigate.recursion_limit_hit", limit=MAX_ANALYST_STEPS)
+        return {"audit_id": audit_id, "repo": str(repo), "findings": []}
+
     report: FindingsReport = result["structured_response"]
     log.info("investigate.done", findings=len(report.findings))
 
