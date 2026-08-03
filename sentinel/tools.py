@@ -1,5 +1,7 @@
+import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 from langchain_core.tools import tool
@@ -112,6 +114,87 @@ def make_secret_scan_tool(repo_path: Path):
         return matches[:200]
 
     return scan_hardcoded_secrets
+
+
+def make_semgrep_tool(repo_path: Path):
+    repo_root = repo_path.resolve()
+
+    @tool
+    def run_semgrep() -> list[dict]:
+        """Run semgrep's default Python security rule set (auto config) against the
+        repository. Returns real SAST findings for you to interpret and prioritize --
+        this is grounded tool output, not something to freehand-detect."""
+        try:
+            result = subprocess.run(
+                ["semgrep", "--config=auto", "--json", "--quiet", "--timeout=60", str(repo_root)],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except (subprocess.SubprocessError, OSError) as e:
+            return [{"error": f"semgrep failed to run: {e}"}]
+
+        try:
+            payload = json.loads(result.stdout or "{}")
+        except json.JSONDecodeError:
+            return [{"error": f"semgrep produced unparseable output: {result.stderr[:300]}"}]
+
+        findings = []
+        for r in payload.get("results", [])[:50]:
+            findings.append(
+                {
+                    "file_path": r.get("path", ""),
+                    "line": r.get("start", {}).get("line"),
+                    "check_id": r.get("check_id", ""),
+                    "message": r.get("extra", {}).get("message", ""),
+                    "severity": r.get("extra", {}).get("severity", ""),
+                }
+            )
+        return findings
+
+    return run_semgrep
+
+
+def make_dependency_audit_tool(repo_path: Path):
+    repo_root = repo_path.resolve()
+
+    @tool
+    def run_dependency_audit() -> list[dict]:
+        """Run pip-audit against this project's Python dependencies to find known CVEs.
+        Uses requirements.txt if the repo has one; otherwise audits the currently active
+        Python environment's installed packages (a scope simplification -- resolving an
+        arbitrary target repo's own lockfile is out of scope for now). Returns real
+        vulnerability data for you to interpret and prioritize."""
+        requirements = repo_root / "requirements.txt"
+        cmd = [sys.executable, "-m", "pip_audit", "--format=json"]
+        if requirements.is_file():
+            cmd += ["-r", str(requirements)]
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        except (subprocess.SubprocessError, OSError) as e:
+            return [{"error": f"pip-audit failed to run: {e}"}]
+
+        try:
+            payload = json.loads(result.stdout or "{}")
+        except json.JSONDecodeError:
+            return [{"error": f"pip-audit produced unparseable output: {result.stderr[:300]}"}]
+
+        findings = []
+        for dep in payload.get("dependencies", []):
+            for vuln in dep.get("vulns", []):
+                findings.append(
+                    {
+                        "package": dep.get("name", ""),
+                        "installed_version": dep.get("version", ""),
+                        "vuln_id": vuln.get("id", ""),
+                        "fix_versions": vuln.get("fix_versions", []),
+                        "description": vuln.get("description", "")[:300],
+                    }
+                )
+        return findings[:50]
+
+    return run_dependency_audit
 
 
 def make_test_files_tool(repo_path: Path):

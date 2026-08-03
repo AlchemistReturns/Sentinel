@@ -6,7 +6,7 @@ Full spec and phased build plan tracked privately (see local `sentinel-project-b
 
 ## Status
 
-Phase 2 done: a LangGraph audit graph runs Security, Quality, and Test analyst sub-agents in parallel, synthesizes their findings with a risk tier, and streams the whole run live over WebSocket to the dashboard.
+Phase 3 done: symbol-aware chunking, a Redis-backed content-hash cache (skips re-embedding unchanged code) and semantic cache (dedups near-duplicate findings), findings history in pgvector, real semgrep/pip-audit grounding for the Security Analyst, and cache-hit-rate metrics on `/metrics` for Prometheus.
 
 ## Stack
 
@@ -26,4 +26,6 @@ uv run sentinel audit --repo .         # full multi-agent graph: security + qual
 uv run uvicorn sentinel.api:app --port 8000
 cd frontend && cp .env.local.example .env.local && npm install && npm run dev
 # open http://localhost:3000, click "Run audit"
+
+# metrics: http://localhost:8000/metrics (Prometheus scrapes this via host.docker.internal)
 ```

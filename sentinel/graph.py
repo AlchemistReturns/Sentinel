@@ -1,8 +1,12 @@
 from pathlib import Path
 
+from langchain_openai import OpenAIEmbeddings
 from langgraph.graph import END, START, StateGraph
 
 from sentinel.analysts import quality_analyst_node, security_analyst_node, test_analyst_node
+from sentinel.cache import semantic_lookup
+from sentinel.config import settings
+from sentinel.findings_store import index_findings
 from sentinel.ingest import iter_source_files
 from sentinel.logging import get_logger
 from sentinel.state import AuditState
@@ -25,6 +29,10 @@ def scope_node(state: AuditState) -> dict:
     return {"python_files": python_files}
 
 
+def _finding_signature(f: dict) -> str:
+    return f"{f['analyst']}:{f['symbol']}:{f['explanation'][:200]}"
+
+
 def diagnose_node(state: AuditState) -> dict:
     log = get_logger(audit_id=state["audit_id"])
     merged: list[dict] = []
@@ -34,7 +42,30 @@ def diagnose_node(state: AuditState) -> dict:
         merged.append({**f, "analyst": "quality", "risk_tier": "mechanical"})
     for f in state.get("test_findings", []):
         merged.append({**f, "analyst": "test", "risk_tier": "mechanical"})
-    log.info("diagnose.done", total=len(merged))
+
+    repo = state["repo_path"]
+    if merged:
+        embeddings = OpenAIEmbeddings(
+            model=settings.embedding_model, api_key=settings.openai_api_key
+        )
+        signatures = [_finding_signature(f) for f in merged]
+        vectors = embeddings.embed_documents(signatures)
+        cache_hits = 0
+        for f, sig, vec in zip(merged, signatures, vectors):
+            is_hit = semantic_lookup(repo, sig, vec)
+            f["semantic_cache_hit"] = is_hit
+            cache_hits += is_hit
+
+        index_findings(repo, state["audit_id"], merged)
+        log.info(
+            "diagnose.done",
+            total=len(merged),
+            semantic_cache_hits=cache_hits,
+            semantic_cache_misses=len(merged) - cache_hits,
+        )
+    else:
+        log.info("diagnose.done", total=0)
+
     return {"findings": merged}
 
 

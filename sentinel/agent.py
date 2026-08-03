@@ -41,7 +41,7 @@ unused imports, do not report anything for it.
 # doesn't converge (langgraph's own default recursion_limit is effectively unbounded).
 # Phase 5 replaces this with a proper cost/step budget; for now this just prevents a
 # runaway agent from looping indefinitely and burning tokens.
-MAX_ANALYST_STEPS = 50
+MAX_ANALYST_STEPS = 70
 
 
 def run_investigation(repo_path: str, model: str | None = None) -> dict:

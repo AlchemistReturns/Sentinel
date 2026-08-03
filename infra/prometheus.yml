@@ -6,6 +6,10 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # - job_name: orchestrator
-  #   static_configs:
-  #     - targets: ["orchestrator:8000"]
+  # Orchestrator runs on the host (uv run uvicorn ...), not yet containerized -- see
+  # docker-compose.yml's commented `orchestrator` service. host.docker.internal lets this
+  # container reach it; once the orchestrator is containerized (Phase 5+), switch this
+  # target back to the service name "orchestrator:8000".
+  - job_name: orchestrator
+    static_configs:
+      - targets: ["host.docker.internal:8000"]

@@ -11,8 +11,10 @@ from sentinel.findings import FindingsReport
 from sentinel.logging import get_logger
 from sentinel.state import AuditState
 from sentinel.tools import (
+    make_dependency_audit_tool,
     make_git_diff_tool,
     make_secret_scan_tool,
+    make_semgrep_tool,
     make_test_files_tool,
     make_tools,
 )
@@ -20,23 +22,26 @@ from sentinel.tools import (
 SECURITY_SYSTEM_PROMPT = (
     """You are Sentinel's Security Analyst, part of a multi-agent code review team.
 
-Your task for this run: investigate this repository for hardcoded credentials and secrets.
+Your task for this run: investigate this repository for real security vulnerabilities --
+SAST issues, vulnerable dependencies, and hardcoded credentials.
 
 Process:
-1. Call scan_hardcoded_secrets to get a list of regex-based leads (raw matches, not confirmed
-   vulnerabilities -- your job is to interpret and prioritize them, not to freehand-detect
-   vulnerabilities from scratch).
-2. If scan_hardcoded_secrets returns zero leads, submit your final report immediately with
-   an empty findings list. Do not call read_source_file or any other tool speculatively --
-   there is nothing to investigate without a lead.
-3. For each lead, call read_source_file (once per file) to see it in context and judge
-   whether it is a real hardcoded secret, a false positive (e.g. a test fixture, an example
-   placeholder, an env var name that merely mentions "secret"), or something else entirely.
-4. Optionally call git_diff once to see if a leaked credential was introduced recently.
-5. Report only leads you believe are genuine hardcoded credentials, with your reasoning.
+1. Call run_semgrep to get real static-analysis findings, and run_dependency_audit to get
+   known CVEs in the project's dependencies. Also call scan_hardcoded_secrets for
+   regex-based credential leads. All three tools give you grounded leads -- your job is to
+   interpret and prioritize them, not to freehand-detect vulnerabilities from scratch.
+2. If all three tools return zero leads, submit your final report immediately with an
+   empty findings list. Do not call read_source_file speculatively -- there is nothing to
+   investigate without a lead.
+3. For each semgrep or secret-scan lead, call read_source_file (once per file) to see it
+   in context and judge whether it's a real issue, a false positive (test fixture, example
+   placeholder, etc.), or something else. Dependency-audit CVEs don't need file reads --
+   report them directly using the package name as the "symbol".
+4. Optionally call git_diff once to see if an issue was introduced recently.
+5. Report only leads you believe are genuine, with your reasoning.
 
 Be conservative: false positives are worse than a missed edge case. If nothing looks like a
-real secret, report nothing.
+real issue, report nothing.
 """
     + CONVERGENCE_RULE
 )
@@ -101,13 +106,19 @@ def _run_analyst(
 
 def security_analyst_node(state: AuditState) -> dict:
     repo = Path(state["repo_path"])
-    tools = [*make_tools(repo), make_secret_scan_tool(repo), make_git_diff_tool(repo)]
+    tools = [
+        *make_tools(repo),
+        make_semgrep_tool(repo),
+        make_dependency_audit_tool(repo),
+        make_secret_scan_tool(repo),
+        make_git_diff_tool(repo),
+    ]
     findings = _run_analyst(
         audit_id=state["audit_id"],
         repo=repo,
         tools=tools,
         system_prompt=SECURITY_SYSTEM_PROMPT,
-        user_message="Investigate this repository for hardcoded credentials and secrets.",
+        user_message="Investigate this repository for security vulnerabilities.",
         run_name="security-analyst",
     )
     return {"security_findings": findings}

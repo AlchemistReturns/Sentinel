@@ -15,7 +15,11 @@ app = typer.Typer(help="Sentinel — autonomous codebase auditor")
 def ingest(repo: str = typer.Option(..., "--repo", help="Path to the target repository")):
     configure_logging()
     result = ingest_repo(repo)
-    typer.echo(f"Indexed {result['chunks']} chunks from {result['files']} files (audit_id={result['audit_id']})")
+    typer.echo(
+        f"{result['chunks']} chunks from {result['files']} files: "
+        f"{result['embedded']} embedded, {result['cache_hits']} cache hits "
+        f"(audit_id={result['audit_id']})"
+    )
 
 
 @app.command()
@@ -27,7 +31,7 @@ def query(
     configure_logging()
     results = query_repo(repo, text, k=k)
     for doc in results:
-        typer.echo(f"--- {doc.metadata['file_path']} (chunk {doc.metadata['chunk_index']}) ---")
+        typer.echo(f"--- {doc.metadata['file_path']} :: {doc.metadata['symbol']} ---")
         typer.echo(doc.page_content[:300])
         typer.echo("")
 
