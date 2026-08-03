@@ -1,0 +1,11 @@
+roadmap.md
+sentinel-project-brief.md
+
+.env
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+.next/
+dist/
+build/
