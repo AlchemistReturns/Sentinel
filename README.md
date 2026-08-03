@@ -187,3 +187,7 @@ hardening, and frontend polish. Phase 7 (deploy-readiness) is a written plan onl
 ([`docs/deployment_guide.md`](docs/deployment_guide.md)) — nothing has been deployed to
 the cloud; the point of that phase was confirming the architecture wouldn't need a
 rewrite to get there.
+
+## License
+
+[MIT](LICENSE)
