@@ -6,7 +6,7 @@ Full spec and phased build plan tracked privately (see local `sentinel-project-b
 
 ## Status
 
-Phase 5 done: durable Postgres-backed audit state, a Redis task queue with a worker pool (`rq worker`), a fallback chain (model retry, tool retry-with-backoff), hard per-audit ($0.50) and daily ($5.00) spend caps, a distributed lock so concurrent workers never collide on the same repo's PRs, and an audit-history trend chart in the dashboard. Verified with 2 real concurrent worker processes and 3 simultaneous audit jobs.
+Phase 6 (partial) done: real visual identity — branded nav, light/dark theme toggle, a proper landing/hero state, and stat tiles — replacing the bare default-shadcn dashboard look. No auth (dropped from scope, see `roadmap.md`). GitHub-URL onboarding and a dedicated accessibility pass are still open.
 
 ## Stack
 

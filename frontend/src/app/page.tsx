@@ -1,5 +1,16 @@
 "use client";
 
+import {
+  Bug,
+  FlaskConical,
+  GitPullRequest,
+  Loader2,
+  Play,
+  Radio,
+  ShieldCheck,
+  Sparkles,
+  Square,
+} from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
   CartesianGrid,
@@ -30,6 +41,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   type AuditResult,
   type Finding,
@@ -43,6 +55,12 @@ import {
 } from "@/lib/api";
 
 const DEFAULT_REPO = "E:/Abrar/AI_ML/Sentinel";
+
+const ANALYST_ICON: Record<string, React.ElementType> = {
+  security: ShieldCheck,
+  quality: Sparkles,
+  test: FlaskConical,
+};
 
 const RISK_TIER_VARIANT: Record<string, "destructive" | "secondary"> = {
   risky: "destructive",
@@ -76,13 +94,13 @@ function FixDiff({ finding }: { finding: Finding }) {
   if (!fix) return null;
 
   return (
-    <div className="bg-muted/30 space-y-3 rounded-md border p-4 text-sm">
+    <div className="bg-muted/30 space-y-3 rounded-lg border p-4 text-sm">
       <div>
-        <p className="text-muted-foreground mb-1 text-xs font-medium uppercase">
+        <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
           Proposed fix
         </p>
         <p className="mb-2">{fix.explanation}</p>
-        <div className="overflow-x-auto rounded font-mono text-xs">
+        <div className="overflow-x-auto rounded-md font-mono text-xs">
           {fix.old_snippet && (
             <div className="bg-destructive/10 text-destructive whitespace-pre-wrap px-2 py-1">
               − {fix.old_snippet}
@@ -98,7 +116,7 @@ function FixDiff({ finding }: { finding: Finding }) {
 
       {val && (
         <div>
-          <p className="text-muted-foreground mb-1 text-xs font-medium uppercase">
+          <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
             Validation
           </p>
           <div className="mb-1 flex gap-2">
@@ -167,7 +185,7 @@ function AuditHistoryChart({ history }: { history: AuditResult[] }) {
             type="monotone"
             dataKey="findings"
             name="Findings"
-            stroke="#6366f1"
+            stroke="var(--chart-1)"
             strokeWidth={2}
             dot={false}
           />
@@ -175,12 +193,172 @@ function AuditHistoryChart({ history }: { history: AuditResult[] }) {
             type="monotone"
             dataKey="costCents"
             name="Cost (¢)"
-            stroke="#10b981"
+            stroke="var(--chart-2)"
             strokeWidth={2}
             dot={false}
           />
         </LineChart>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+function StatTile({
+  label,
+  value,
+  icon: Icon,
+  accent,
+}: {
+  label: string;
+  value: string;
+  icon: React.ElementType;
+  accent?: "destructive" | "primary";
+}) {
+  return (
+    <div className="bg-card flex items-center gap-3 rounded-xl border p-4">
+      <div
+        className={
+          "flex size-9 shrink-0 items-center justify-center rounded-lg " +
+          (accent === "destructive"
+            ? "bg-destructive/10 text-destructive"
+            : "bg-primary/10 text-primary")
+        }
+      >
+        <Icon className="size-4" />
+      </div>
+      <div>
+        <p className="text-lg leading-none font-semibold tabular-nums">{value}</p>
+        <p className="text-muted-foreground text-xs">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function KillSwitchButton({
+  active,
+  busy,
+  onToggle,
+}: {
+  active: boolean;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Button
+      onClick={onToggle}
+      disabled={busy}
+      variant={active ? "destructive" : "outline"}
+      size="sm"
+      className="gap-1.5"
+    >
+      <Square className="size-3.5 fill-current" />
+      {active ? "Halted" : "Kill switch"}
+    </Button>
+  );
+}
+
+function Nav({
+  killActive,
+  killBusy,
+  onToggleKillSwitch,
+}: {
+  killActive: boolean;
+  killBusy: boolean;
+  onToggleKillSwitch: () => void;
+}) {
+  return (
+    <header className="border-border/60 bg-background/80 sticky top-0 z-10 border-b backdrop-blur">
+      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
+        <div className="flex items-center gap-2">
+          <div className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-md">
+            <ShieldCheck className="size-4" />
+          </div>
+          <span className="font-heading font-semibold tracking-tight">Sentinel</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <KillSwitchButton active={killActive} busy={killBusy} onToggle={onToggleKillSwitch} />
+          <ThemeToggle />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function Hero({
+  repo,
+  onRepoChange,
+  onRun,
+  running,
+  disabled,
+}: {
+  repo: string;
+  onRepoChange: (v: string) => void;
+  onRun: () => void;
+  running: boolean;
+  disabled: boolean;
+}) {
+  const steps = [
+    {
+      icon: ShieldCheck,
+      title: "Security Analyst",
+      desc: "Real semgrep + pip-audit findings, grounded — not freehand-detected.",
+    },
+    {
+      icon: Sparkles,
+      title: "Quality Analyst",
+      desc: "Dead code and unused imports, flagged with evidence and reasoning.",
+    },
+    {
+      icon: FlaskConical,
+      title: "Test Analyst",
+      desc: "Untested functions surfaced so coverage gaps aren't invisible.",
+    },
+  ];
+
+  return (
+    <div className="flex flex-col items-center gap-10 py-16 text-center">
+      <div className="flex flex-col items-center gap-4">
+        <Badge variant="secondary" className="gap-1.5 px-3 py-1">
+          <Radio className="text-primary size-3" />
+          Multi-agent · LangGraph
+        </Badge>
+        <h1 className="font-heading max-w-2xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
+          An AI engineer that audits your codebase
+        </h1>
+        <p className="text-muted-foreground max-w-lg text-balance">
+          Three specialized analysts investigate your repo in parallel, then Sentinel
+          opens validated, explained fix PRs. Nothing merges without you.
+        </p>
+      </div>
+
+      <div className="flex w-full max-w-lg flex-col gap-2 sm:flex-row">
+        <Input
+          value={repo}
+          onChange={(e) => onRepoChange(e.target.value)}
+          placeholder="Path to target repository"
+          className="h-11 font-mono text-sm"
+        />
+        <Button onClick={onRun} disabled={running || disabled} size="lg" className="gap-2">
+          {running ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Play className="size-4" />
+          )}
+          Run audit
+        </Button>
+      </div>
+
+      <div className="grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
+        {steps.map((s) => (
+          <div key={s.title} className="bg-card flex flex-col items-center gap-2 rounded-xl border p-5 text-center">
+            <div className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-lg">
+              <s.icon className="size-4" />
+            </div>
+            <p className="text-sm font-medium">{s.title}</p>
+            <p className="text-muted-foreground text-xs leading-relaxed">{s.desc}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -277,161 +455,195 @@ export default function Home() {
     });
   }
 
+  const hasRunSomething = Boolean(audit) || running || timeline.length > 0;
+  const riskyCount = audit?.findings.filter((f) => f.risk_tier === "risky").length ?? 0;
+  const prCount =
+    audit?.findings.filter((f) => f.pr_status === "opened" || f.pr_status === "opened_draft")
+      .length ?? 0;
+
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-16">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Sentinel</h1>
-          <p className="text-muted-foreground text-sm">
-            Autonomous codebase auditor — Security, Quality &amp; Test analysts
+    <div className="flex flex-1 flex-col">
+      <Nav killActive={killActive} killBusy={killBusy} onToggleKillSwitch={handleToggleKillSwitch} />
+
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 pb-16">
+        {!hasRunSomething ? (
+          <Hero
+            repo={repo}
+            onRepoChange={setRepo}
+            onRun={handleRunAudit}
+            running={running}
+            disabled={killActive}
+          />
+        ) : (
+          <div className="flex flex-col gap-2 pt-8 sm:flex-row sm:items-center">
+            <Input
+              value={repo}
+              onChange={(e) => setRepo(e.target.value)}
+              placeholder="Path to target repository"
+              className="font-mono text-sm"
+            />
+            <Button onClick={handleRunAudit} disabled={running || killActive} className="gap-2">
+              {running ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Play className="size-4" />
+              )}
+              Run audit
+            </Button>
+          </div>
+        )}
+
+        {killActive && (
+          <p className="text-destructive text-sm">
+            Kill switch is active — no new audits or agent actions will run until deactivated.
           </p>
-        </div>
-        <Button
-          onClick={handleToggleKillSwitch}
-          disabled={killBusy}
-          variant={killActive ? "destructive" : "outline"}
-        >
-          {killActive ? "🛑 Kill switch: HALTED" : "Kill switch: active"}
-        </Button>
-      </div>
+        )}
+        {error && <p className="text-destructive text-sm">Error: {error}</p>}
 
-      <div className="flex items-center gap-2">
-        <Input
-          value={repo}
-          onChange={(e) => setRepo(e.target.value)}
-          placeholder="Path to target repository"
-          className="font-mono text-sm"
-        />
-        <Button onClick={handleRunAudit} disabled={running || killActive}>
-          {running ? "Running audit…" : "Run audit"}
-        </Button>
-      </div>
+        {(running || timeline.length > 0) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                {running && <Loader2 className="text-primary size-4 animate-spin" />}
+                Live audit
+              </CardTitle>
+              <CardDescription>Sub-agent activity as it happens</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div
+                ref={logRef}
+                className="bg-muted/50 max-h-64 overflow-y-auto rounded-md p-3 font-mono text-xs leading-relaxed"
+              >
+                {timeline.map((entry) => (
+                  <div key={entry.id}>
+                    <span>{entry.label}</span>
+                    {entry.detail && (
+                      <span className="text-muted-foreground"> — {entry.detail}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-      {killActive && (
-        <p className="text-destructive text-sm">
-          Kill switch is active — no new audits or agent actions will run until deactivated.
-        </p>
-      )}
-      {error && <p className="text-destructive text-sm">Error: {error}</p>}
-
-      {(running || timeline.length > 0) && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Live audit</CardTitle>
-            <CardDescription>Sub-agent activity as it happens</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div
-              ref={logRef}
-              className="bg-muted/50 max-h-64 overflow-y-auto rounded-md p-3 font-mono text-xs leading-relaxed"
-            >
-              {timeline.map((entry) => (
-                <div key={entry.id}>
-                  <span>{entry.label}</span>
-                  {entry.detail && (
-                    <span className="text-muted-foreground"> — {entry.detail}</span>
-                  )}
-                </div>
-              ))}
+        {audit && (
+          <>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <StatTile label="Findings" value={String(audit.findings.length)} icon={Bug} />
+              <StatTile
+                label="Risky"
+                value={String(riskyCount)}
+                icon={ShieldCheck}
+                accent="destructive"
+              />
+              <StatTile label="PRs opened" value={String(prCount)} icon={GitPullRequest} />
+              <StatTile
+                label="Cost"
+                value={audit.cost_usd !== undefined ? `$${audit.cost_usd.toFixed(3)}` : "—"}
+                icon={Sparkles}
+              />
             </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {!audit && !running && !error && (
-        <p className="text-muted-foreground text-sm">
-          No audits yet. Click &quot;Run audit&quot; to investigate the repository.
-        </p>
-      )}
-
-      {audit && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Findings</CardTitle>
-            <CardDescription>
-              Audit {audit.audit_id} · {audit.repo}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {audit.findings.length === 0 ? (
-              <p className="text-muted-foreground text-sm">No findings.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Analyst</TableHead>
-                    <TableHead>Risk</TableHead>
-                    <TableHead>File</TableHead>
-                    <TableHead>Symbol</TableHead>
-                    <TableHead>Explanation</TableHead>
-                    <TableHead>Fix</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {audit.findings.map((f, i) => (
-                    <Fragment key={i}>
-                      <TableRow
-                        className={f.proposed_fix ? "cursor-pointer" : undefined}
-                        onClick={() => f.proposed_fix && toggleExpanded(i)}
-                      >
-                        <TableCell className="capitalize">{f.analyst ?? "—"}</TableCell>
-                        <TableCell>
-                          {f.risk_tier ? (
-                            <Badge variant={RISK_TIER_VARIANT[f.risk_tier] ?? "secondary"}>
-                              {f.risk_tier}
-                            </Badge>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">{f.file_path}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{f.symbol || "—"}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {f.explanation}
-                        </TableCell>
-                        <TableCell>
-                          <PrStatusBadge finding={f} />
-                        </TableCell>
+            <Card>
+              <CardHeader>
+                <CardTitle>Findings</CardTitle>
+                <CardDescription>
+                  Audit {audit.audit_id} · {audit.repo}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {audit.findings.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">No findings.</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Analyst</TableHead>
+                        <TableHead>Risk</TableHead>
+                        <TableHead>File</TableHead>
+                        <TableHead>Symbol</TableHead>
+                        <TableHead>Explanation</TableHead>
+                        <TableHead>Fix</TableHead>
                       </TableRow>
-                      {expanded.has(i) && f.proposed_fix && (
-                        <TableRow>
-                          <TableCell colSpan={6}>
-                            <FixDiff finding={f} />
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                    </TableHeader>
+                    <TableBody>
+                      {audit.findings.map((f, i) => {
+                        const AnalystIcon = ANALYST_ICON[f.analyst ?? ""];
+                        return (
+                          <Fragment key={i}>
+                            <TableRow
+                              className={f.proposed_fix ? "cursor-pointer" : undefined}
+                              onClick={() => f.proposed_fix && toggleExpanded(i)}
+                            >
+                              <TableCell className="capitalize">
+                                <span className="flex items-center gap-1.5">
+                                  {AnalystIcon && (
+                                    <AnalystIcon className="text-muted-foreground size-3.5" />
+                                  )}
+                                  {f.analyst ?? "—"}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                {f.risk_tier ? (
+                                  <Badge variant={RISK_TIER_VARIANT[f.risk_tier] ?? "secondary"}>
+                                    {f.risk_tier}
+                                  </Badge>
+                                ) : (
+                                  "—"
+                                )}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs">{f.file_path}</TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">{f.symbol || "—"}</Badge>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground text-sm">
+                                {f.explanation}
+                              </TableCell>
+                              <TableCell>
+                                <PrStatusBadge finding={f} />
+                              </TableCell>
+                            </TableRow>
+                            {expanded.has(i) && f.proposed_fix && (
+                              <TableRow>
+                                <TableCell colSpan={6}>
+                                  <FixDiff finding={f} />
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
 
-      {history.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Audit history</CardTitle>
-            <CardDescription>
-              Findings and cost per audit this session ({history.length} run
-              {history.length === 1 ? "" : "s"})
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AuditHistoryChart history={history} />
-          </CardContent>
-        </Card>
-      )}
+        {history.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Audit history</CardTitle>
+              <CardDescription>
+                Findings and cost per audit this session ({history.length} run
+                {history.length === 1 ? "" : "s"})
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AuditHistoryChart history={history} />
+            </CardContent>
+          </Card>
+        )}
 
-      <Separator />
-      <p className="text-muted-foreground text-center text-xs">
-        Sentinel never merges anything automatically. Every PR — mechanical or risky — is
-        opened for human review; risky fixes open as drafts and are always labeled
-        needs-security-review.
-      </p>
+        <Separator />
+        <p className="text-muted-foreground pb-2 text-center text-xs">
+          Sentinel never merges anything automatically. Every PR — mechanical or risky — is
+          opened for human review; risky fixes open as drafts and are always labeled
+          needs-security-review.
+        </p>
+      </main>
     </div>
   );
 }
