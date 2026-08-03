@@ -1,5 +1,8 @@
+import json
+
 import typer
 
+from sentinel.agent import run_investigation
 from sentinel.ingest import ingest_repo, query_repo
 from sentinel.logging import configure_logging
 
@@ -25,6 +28,13 @@ def query(
         typer.echo(f"--- {doc.metadata['file_path']} (chunk {doc.metadata['chunk_index']}) ---")
         typer.echo(doc.page_content[:300])
         typer.echo("")
+
+
+@app.command()
+def investigate(repo: str = typer.Option(..., "--repo", help="Path to the target repository")):
+    configure_logging()
+    result = run_investigation(repo)
+    typer.echo(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":
