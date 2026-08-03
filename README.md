@@ -6,7 +6,7 @@ Full spec and phased build plan tracked privately (see local `sentinel-project-b
 
 ## Status
 
-Phase 6 done: real visual identity (branded nav, light/dark theme toggle, landing/hero state, stat tiles), GitHub-URL onboarding — paste a repo URL, Sentinel clones it and runs the audit, no terminal needed — and an accessibility pass. No auth (dropped from scope, see `roadmap.md`). Verified end to end: URL → clone → live audit → real findings, browser-only.
+All 7 roadmap phases done. Phase 7 (deploy-readiness review) is a planning doc only — see `docs/deployment_guide.md` for what a real cloud deploy would need; nothing has actually been deployed.
 
 ## Stack
 
