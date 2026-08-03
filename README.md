@@ -6,7 +6,7 @@ Full spec and phased build plan tracked privately (see local `sentinel-project-b
 
 ## Status
 
-Repo scaffolding done (Python project via `uv`, infra skeleton via Docker Compose). No agent code yet.
+Phase 0 done: repo ingestion + pgvector indexing working (`sentinel ingest`, `sentinel query`). No agent code yet.
 
 ## Stack
 
@@ -17,5 +17,6 @@ LangGraph + Deep Agents, LangChain, OpenAI, Postgres+pgvector, Redis, Next.js, D
 ```bash
 cp .env.example .env   # fill in OPENAI_API_KEY, GITHUB_TOKEN, etc.
 docker compose up -d   # postgres+pgvector, redis, prometheus, grafana
-uv run python -c "print('ok')"
+uv run sentinel ingest --repo .
+uv run sentinel query --repo . --text "your question about the codebase"
 ```
