@@ -1,0 +1,10 @@
+[project]
+name = "sentinel"
+version = "0.1.0"
+description = "Autonomous Codebase Auditor and Refactoring Agent"
+authors = [
+    { name = "Abrar Mahmud Hasan" }
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []

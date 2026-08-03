@@ -6,8 +6,16 @@ Full spec and phased build plan tracked privately (see local `sentinel-project-b
 
 ## Status
 
-Pre-implementation. Repo setup in progress.
+Repo scaffolding done (Python project via `uv`, infra skeleton via Docker Compose). No agent code yet.
 
 ## Stack
 
 LangGraph + Deep Agents, LangChain, OpenAI, Postgres+pgvector, Redis, Next.js, Docker Compose.
+
+## Getting started
+
+```bash
+cp .env.example .env   # fill in OPENAI_API_KEY, GITHUB_TOKEN, etc.
+docker compose up -d   # postgres+pgvector, redis, prometheus, grafana
+uv run python -c "print('ok')"
+```
