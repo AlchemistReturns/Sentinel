@@ -1,6 +1,15 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +34,7 @@ import {
   type AuditResult,
   type Finding,
   type TimelineEntry,
+  fetchAuditHistory,
   fetchKillSwitch,
   fetchLatestAudit,
   liveAuditSocketUrl,
@@ -116,6 +126,65 @@ function FixDiff({ finding }: { finding: Finding }) {
   );
 }
 
+type HistoryPoint = {
+  label: string;
+  findings: number;
+  costCents: number;
+};
+
+function AuditHistoryChart({ history }: { history: AuditResult[] }) {
+  if (history.length < 2) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        Run at least two audits to see a trend line.
+      </p>
+    );
+  }
+
+  const data: HistoryPoint[] = history.map((a, i) => ({
+    label: a.timestamp ? new Date(a.timestamp).toLocaleTimeString() : `#${i + 1}`,
+    findings: a.findings.length,
+    costCents: Math.round((a.cost_usd ?? 0) * 100),
+  }));
+
+  return (
+    <div className="h-56 w-full">
+      <ResponsiveContainer>
+        <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+          <XAxis dataKey="label" fontSize={11} tickLine={false} />
+          <YAxis fontSize={11} tickLine={false} allowDecimals={false} />
+          <Tooltip
+            contentStyle={{
+              fontSize: 12,
+              borderRadius: 8,
+              background: "var(--popover)",
+              color: "var(--popover-foreground)",
+              border: "1px solid var(--border)",
+            }}
+          />
+          <Line
+            type="monotone"
+            dataKey="findings"
+            name="Findings"
+            stroke="#6366f1"
+            strokeWidth={2}
+            dot={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="costCents"
+            name="Cost (¢)"
+            stroke="#10b981"
+            strokeWidth={2}
+            dot={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export default function Home() {
   const [repo, setRepo] = useState(DEFAULT_REPO);
   const [audit, setAudit] = useState<AuditResult | null>(null);
@@ -125,8 +194,15 @@ export default function Home() {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [killActive, setKillActive] = useState(false);
   const [killBusy, setKillBusy] = useState(false);
+  const [history, setHistory] = useState<AuditResult[]>([]);
   const seqRef = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
+
+  function refreshHistory() {
+    fetchAuditHistory()
+      .then(setHistory)
+      .catch(() => {});
+  }
 
   useEffect(() => {
     fetchLatestAudit()
@@ -135,6 +211,7 @@ export default function Home() {
     fetchKillSwitch()
       .then(setKillActive)
       .catch(() => {});
+    refreshHistory();
   }, []);
 
   useEffect(() => {
@@ -161,8 +238,12 @@ export default function Home() {
             audit_id: parsed.audit_id,
             repo: parsed.repo,
             findings: parsed.findings,
+            cost_usd: parsed.cost_usd,
+            timestamp: parsed.timestamp,
+            error: parsed.error,
           });
           setRunning(false);
+          refreshHistory();
         }
       } catch {
         // ignore malformed frames
@@ -326,6 +407,21 @@ export default function Home() {
                 </TableBody>
               </Table>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {history.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Audit history</CardTitle>
+            <CardDescription>
+              Findings and cost per audit this session ({history.length} run
+              {history.length === 1 ? "" : "s"})
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AuditHistoryChart history={history} />
           </CardContent>
         </Card>
       )}

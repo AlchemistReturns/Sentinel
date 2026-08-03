@@ -5,8 +5,18 @@ import sys
 from pathlib import Path
 
 from langchain_core.tools import tool
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from sentinel.ingest import iter_source_files
+
+# Retries transient failures in tools that hit the network (semgrep rule registry,
+# pip-audit's PyPI advisory DB) -- part of the fallback chain: tool failure -> retry with
+# backoff before the LLM ever sees an error.
+_network_tool_retry = retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    reraise=True,
+)
 
 SECRET_PATTERNS = [
     ("aws_access_key", re.compile(r"AKIA[0-9A-Z]{16}")),
@@ -116,6 +126,16 @@ def make_secret_scan_tool(repo_path: Path):
     return scan_hardcoded_secrets
 
 
+@_network_tool_retry
+def _run_semgrep_subprocess(repo_root: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["semgrep", "--config=auto", "--json", "--quiet", "--timeout=60", str(repo_root)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+
 def make_semgrep_tool(repo_path: Path):
     repo_root = repo_path.resolve()
 
@@ -125,14 +145,9 @@ def make_semgrep_tool(repo_path: Path):
         repository. Returns real SAST findings for you to interpret and prioritize --
         this is grounded tool output, not something to freehand-detect."""
         try:
-            result = subprocess.run(
-                ["semgrep", "--config=auto", "--json", "--quiet", "--timeout=60", str(repo_root)],
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
+            result = _run_semgrep_subprocess(repo_root)
         except (subprocess.SubprocessError, OSError) as e:
-            return [{"error": f"semgrep failed to run: {e}"}]
+            return [{"error": f"semgrep failed to run after retries: {e}"}]
 
         try:
             payload = json.loads(result.stdout or "{}")
@@ -155,6 +170,11 @@ def make_semgrep_tool(repo_path: Path):
     return run_semgrep
 
 
+@_network_tool_retry
+def _run_pip_audit_subprocess(cmd: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+
 def make_dependency_audit_tool(repo_path: Path):
     repo_root = repo_path.resolve()
 
@@ -171,9 +191,9 @@ def make_dependency_audit_tool(repo_path: Path):
             cmd += ["-r", str(requirements)]
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            result = _run_pip_audit_subprocess(cmd)
         except (subprocess.SubprocessError, OSError) as e:
-            return [{"error": f"pip-audit failed to run: {e}"}]
+            return [{"error": f"pip-audit failed to run after retries: {e}"}]
 
         try:
             payload = json.loads(result.stdout or "{}")

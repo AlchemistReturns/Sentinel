@@ -8,6 +8,7 @@ from sentinel import killswitch
 from sentinel.agent import CONVERGENCE_RULE, MAX_ANALYST_STEPS
 from sentinel.agent import SYSTEM_PROMPT as QUALITY_SYSTEM_PROMPT
 from sentinel.config import settings
+from sentinel.cost import BudgetExceededError
 from sentinel.findings import FindingsReport
 from sentinel.logging import get_logger
 from sentinel.state import AuditState
@@ -70,6 +71,25 @@ all, report that as a single finding on the repo root instead of one per functio
 )
 
 
+def _invoke_agent(*, model: str, tools: list, system_prompt: str, user_message: str, run_name: str,
+                   audit_id: str, repo: Path):
+    agent = create_agent(
+        model=model,
+        tools=tools,
+        system_prompt=system_prompt,
+        response_format=ToolStrategy(FindingsReport, handle_errors=True),
+    )
+    return agent.invoke(
+        {"messages": [{"role": "user", "content": user_message}]},
+        config={
+            "run_name": run_name,
+            "tags": ["sentinel", run_name],
+            "metadata": {"audit_id": audit_id, "repo": str(repo), "model": model},
+            "recursion_limit": MAX_ANALYST_STEPS,
+        },
+    )
+
+
 def _run_analyst(
     *,
     audit_id: str,
@@ -83,26 +103,46 @@ def _run_analyst(
     if killswitch.is_active():
         log.info("analyst.halted", reason="kill switch active")
         return []
-    agent = create_agent(
-        model=settings.agent_model,
-        tools=tools,
-        system_prompt=system_prompt,
-        response_format=ToolStrategy(FindingsReport, handle_errors=True),
-    )
-    log.info("analyst.start")
+
+    log.info("analyst.start", model=settings.agent_model)
     try:
-        result = agent.invoke(
-            {"messages": [{"role": "user", "content": user_message}]},
-            config={
-                "run_name": run_name,
-                "tags": ["sentinel", run_name],
-                "metadata": {"audit_id": audit_id, "repo": str(repo)},
-                "recursion_limit": MAX_ANALYST_STEPS,
-            },
+        result = _invoke_agent(
+            model=settings.agent_model,
+            tools=tools,
+            system_prompt=system_prompt,
+            user_message=user_message,
+            run_name=run_name,
+            audit_id=audit_id,
+            repo=repo,
         )
     except GraphRecursionError:
         log.error("analyst.recursion_limit_hit", limit=MAX_ANALYST_STEPS)
         return []
+    except BudgetExceededError:
+        raise  # hard cutoff -- must propagate, never silently swallowed by a fallback retry
+    except Exception as e:
+        # Fallback chain: a transient model failure (timeout, rate limit, API error) drops
+        # to a cheaper/faster model for one retry rather than failing the whole audit.
+        log.error("analyst.model_failed", error=str(e), fallback_model=settings.fallback_model)
+        try:
+            result = _invoke_agent(
+                model=settings.fallback_model,
+                tools=tools,
+                system_prompt=system_prompt,
+                user_message=user_message,
+                run_name=run_name,
+                audit_id=audit_id,
+                repo=repo,
+            )
+        except GraphRecursionError:
+            log.error("analyst.recursion_limit_hit", limit=MAX_ANALYST_STEPS)
+            return []
+        except BudgetExceededError:
+            raise
+        except Exception as e2:
+            log.error("analyst.fallback_also_failed", error=str(e2))
+            return []
+
     report: FindingsReport = result["structured_response"]
     log.info("analyst.done", findings=len(report.findings))
     return [f.model_dump() for f in report.findings]

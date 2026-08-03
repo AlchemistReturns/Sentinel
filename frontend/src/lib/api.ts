@@ -40,6 +40,9 @@ export type AuditResult = {
   audit_id: string;
   repo: string;
   findings: Finding[];
+  cost_usd?: number;
+  timestamp?: string;
+  error?: string;
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -49,6 +52,12 @@ export async function fetchLatestAudit(): Promise<AuditResult | null> {
   const res = await fetch(`${API_URL}/api/audits/latest`, { cache: "no-store" });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Failed to fetch latest audit: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchAuditHistory(): Promise<AuditResult[]> {
+  const res = await fetch(`${API_URL}/api/audits`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Failed to fetch audit history: ${res.status}`);
   return res.json();
 }
 
